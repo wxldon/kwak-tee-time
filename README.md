@@ -1,0 +1,371 @@
+# teesniper
+
+Books tee times at **Los Verdes** and **Alondra Park** the moment they are
+released, from the Windows command line.
+
+---
+
+## Contents
+
+- [How the drop works](#how-the-drop-works)
+- [What the bot does](#what-the-bot-does)
+- [Install](#install)
+- [First run](#first-run)
+- [Giving it your card](#giving-it-your-card)
+- [Everyday use](#everyday-use)
+- [All commands](#all-commands)
+- [Full test run](#full-test-run)
+- [Troubleshooting](#troubleshooting)
+- [Known limits](#known-limits)
+
+---
+
+## How the drop works
+
+Tee times at these courses do **not** trickle out. Every slot for a given day
+becomes bookable at one instant:
+
+> **8 days ahead, at 8:00 PM Pacific.**
+
+So a tee time on **Tuesday Sept 15** goes live at **8:00 PM on Monday Sept 7**.
+Before that moment the courses' own site returns nothing but a message saying
+when it will open; a second after, the whole day is up for grabs and the good
+times are gone in seconds.
+
+Sniping is therefore a timing problem, not a searching problem.
+
+Check any date:
+
+```
+snipe.bat when 2026-09-15
+```
+```
+  2026-09-15 opens Monday, September 07 2026 at 08:00 PM PDT
+  That is 147h 39m from now.
+```
+
+## What the bot does
+
+Start it any time before the drop — hours early is fine. It then:
+
+1. **Computes the exact release moment** for your date.
+2. **Sleeps until 75 seconds out**, then wakes and opens a connection to the
+   booking API so the handshake is already paid for.
+3. **Polls cheaply while it waits.** The API supports conditional requests, so
+   each check comes back empty ("nothing changed") until inventory appears.
+4. **Starts its fast loop 3 seconds early.** The server's clock can't be read
+   from outside, so a few seconds of lead absorbs the difference.
+5. **The instant the listing changes**, filters to your time window, player
+   count and hole preference, ranks the matches, and books the best one.
+6. **If a slot is taken mid-attempt**, immediately tries the next-best — up to
+   4 by default.
+
+It aims within about a millisecond of the target moment.
+
+Watching **both** courses at once is supported. It books **one** tee time —
+whichever course produces a match first — never two.
+
+---
+
+## Install
+
+You need **Python 3.11 or newer**.
+
+1. Install Python from [python.org](https://www.python.org/downloads/).
+   **Tick "Add python.exe to PATH"** on the first screen of the installer —
+   this is the single most common thing to get wrong.
+2. Unzip this folder somewhere you can find it, e.g. `C:\teesniper`.
+3. Open **Command Prompt**, and go to the folder:
+   ```
+   cd C:\teesniper
+   ```
+4. Run it once to bootstrap:
+   ```
+   snipe.bat check
+   ```
+
+The first launch creates a virtual environment and installs two small
+dependencies. That takes a minute; afterwards startup is instant. You never
+need to activate anything — `snipe.bat` handles it.
+
+## First run
+
+The first time you run any command it walks you through setup:
+
+```
+  First run -- let's get you set up.
+
+  This copy is set up with:  golfer@example.com
+  Use that account? (y/n) [y]:
+```
+
+- Press **Enter** to use the account the tool shipped with.
+- Type **n** to enter your own TeeItUp email and password instead.
+
+Either way it immediately tries that login against both courses and tells you
+whether it worked, so a typo surfaces now rather than at 8pm.
+
+Then it asks for the card to book with. Your password, card number and CVV are
+**not shown on screen** as you type them.
+
+Everything is written to `config.json` in the same folder. It never leaves your
+machine except as the fields the booking site itself asks for.
+
+To change the account later, delete `config.json` and run `snipe.bat check`
+again.
+
+## Giving it your card
+
+Both courses charge at booking, so a card is required. Add or replace it any
+time without retyping your login:
+
+```
+snipe.bat card
+```
+
+```
+Current card: (none)
+
+Card used at checkout. Both courses require one.
+Nothing is echoed as you type the number and CVV.
+
+Card number:
+Expiry month (MM): 09
+Expiry year (YYYY): 2030
+CVV:
+Name on card: Kevin Kwak
+Billing ZIP: 90045
+```
+
+You can also edit `config.json` by hand:
+
+```json
+{
+  "username": "you@example.com",
+  "password": "your-password",
+  "phone": "13105551234",
+  "card": {
+    "number": "4111111111111111",
+    "exp_month": "09",
+    "exp_year": "2030",
+    "cvv": "123",
+    "name": "Kevin Kwak",
+    "zip": "90045"
+  }
+}
+```
+
+Confirm it took:
+
+```
+snipe.bat check
+```
+```
+Card:   ****1111  (ok)
+  Los Verdes Golf Course: logged in as Kevin Kwak
+  Alondra Park Golf Courses: logged in as Kevin Kwak
+```
+
+---
+
+## Everyday use
+
+**Just double-click `snipe.bat`**, or run it with no arguments, and it asks for
+everything:
+
+```
+snipe.bat
+```
+```
+Play date (YYYY-MM-DD, 'tomorrow', or 'max'): 2026-09-15
+Earliest acceptable tee time [6:00 am]: 7:00 am
+Latest acceptable tee time [11:00 am]: 10:00 am
+Number of players [2]: 2
+Holes -- 9, 18, or 'any' [any]: 18
+
+  1) Los Verdes
+  2) Alondra Park
+  3) Both
+Course [3]:
+```
+
+Or give it everything up front and walk away:
+
+```
+snipe.bat snipe -d 2026-09-15 -p 2 -c both -s "7:00 am" -e "10:00 am"
+```
+
+It prints a plan, asks you to confirm, then waits:
+
+```
+  Plan
+    Date     Tuesday, September 15 2026
+    Time     07:00 AM - 10:00 AM
+    Players  2
+    Holes    any
+    Courses  Los Verdes Golf Course, Alondra Park Golf Courses
+    Card     ****1111
+    Opens    Mon Sep 07 08:00 PM PDT  (in 147h 39m)
+    Mode     LIVE -- will charge the card above
+
+  Proceed? (y/n) [y]:
+```
+
+Leave the window open. At 7:58:45 PM it wakes up, and at 8:00:00 it goes.
+
+### Dates you can type
+
+`2026-09-15` · `9/15` · `Sep 15` · `tomorrow` · `max` (the furthest bookable day)
+
+### Times you can type
+
+`7am` · `7:30 am` · `7` · `14:00` · `2:30pm`
+
+---
+
+## All commands
+
+| Command | What it does |
+|---|---|
+| `snipe.bat` | Interactive snipe — asks for everything |
+| `snipe.bat snipe [flags]` | Snipe with options preset |
+| `snipe.bat list` | Show what's bookable right now |
+| `snipe.bat when <date>` | Show when a date unlocks |
+| `snipe.bat check` | Verify login and card |
+| `snipe.bat card` | Add or replace the card |
+| `snipe.bat init` | Re-enter login *and* card from scratch |
+
+### Flags for `snipe` and `list`
+
+| Flag | Meaning | Default |
+|---|---|---|
+| `-d`, `--date` | Play date | asked |
+| `-p`, `--players` | 1–4 | asked |
+| `-c`, `--course` | `losverdes`, `alondra`, `both` | asked |
+| `-s`, `--start` | Earliest acceptable time | asked |
+| `-e`, `--end` | Latest acceptable time | asked |
+| `--holes` | `9` or `18` | either |
+| `--dry-run` | Find and stage a slot, stop before paying | off |
+| `--yes` | Skip the confirmation prompt | off |
+| `--tries` | Slots to attempt before giving up | 4 |
+| `--deadline` | Seconds to keep hunting after the drop | 180 |
+| `-v` | Verbose logging | off |
+
+### Examples
+
+```
+:: What's open at both courses tomorrow morning?
+snipe.bat list -d tomorrow -p 2 -c both -s 6am -e 10am
+
+:: Practice run — goes through everything except payment
+snipe.bat snipe -d 2026-09-15 -p 2 -c both -s 7am -e 10am --dry-run
+
+:: 18 holes at Los Verdes only, unattended
+snipe.bat snipe -d 2026-09-15 -p 4 -c losverdes -s 7am -e 9am --holes 18 --yes
+```
+
+---
+
+## Full test run
+
+Do this once before relying on it, ideally on a cheap slot.
+
+**Step 1 — check the plumbing.** Confirms both logins and the card.
+
+```
+snipe.bat check
+```
+
+**Step 2 — dry run.** Goes through search, filtering, and staging a real slot in
+the cart, then releases it. Charges nothing.
+
+```
+snipe.bat list -d tomorrow -p 2 -c both -s 6am -e 6pm
+snipe.bat snipe -d tomorrow -p 2 -c both -s 6am -e 6pm --dry-run --yes
+```
+
+You should see `Staged ...` then `Dry run -- stopping before payment.`
+
+**Step 3 — one real booking.** ⚠️ **This charges the card.**
+
+Pick the cheapest thing available — **Alondra Park Par 3** is usually around
+$18–22 for 2 players. Use `list` first to find one, then book a narrow window
+so you get the slot you expect:
+
+```
+snipe.bat list -d tomorrow -p 2 -c alondra -s 6am -e 6pm
+snipe.bat snipe -d tomorrow -p 2 -c alondra -s "2:00 pm" -e "2:30 pm"
+```
+
+Watch for:
+
+```
+  [alondra] Staged Tue Sep 08 02:12 PM | Alondra Park Par 3 | ...
+  [alondra] Order created; requesting payment token.
+  [alondra] Payment accepted.
+  [alondra] BOOKED -- confirmation 12345678
+```
+
+Then **confirm it landed** — check your email for the confirmation, and log in
+to the course website and look at your reservations. If the booking is not
+there, or the amount charged looks wrong, stop and report exactly what the
+terminal printed.
+
+**Step 4 — a real snipe.** Pick a date 8 days out, start the bot any time
+beforehand, and leave the window open through 8:00 PM.
+
+---
+
+## Troubleshooting
+
+**`'snipe.bat' is not recognized`**
+You're not in the right folder. `cd` to where you unzipped it.
+
+**`Python was not found`**
+Python isn't on PATH. Reinstall from python.org with **"Add python.exe to PATH"**
+ticked, then open a *new* Command Prompt.
+
+**`That email/password was rejected`**
+The login is wrong, or the account doesn't exist at that course. Log in on the
+course website in a browser to confirm, then delete `config.json` and rerun.
+
+**`No card saved. Booking will fail at payment.`**
+Run `snipe.bat card`.
+
+**`Slot gone`**
+Someone beat you to it. Normal at a busy drop — the bot moves to the next slot
+automatically.
+
+**`The card needs 3-D Secure`**
+Your bank wants an extra confirmation the bot can't answer. It prints a link;
+open it in a browser within 5 minutes to finish. If this keeps happening, try a
+different card.
+
+**Nothing matched**
+Widen the time range, allow either hole count, or search `both` courses. Use
+`list` to see what actually exists that day.
+
+**It says a date is "beyond the booking window"**
+Only 8 days out are bookable. The bot offers to wait for it anyway — say yes and
+it sleeps until the drop.
+
+---
+
+## Known limits
+
+- **The payment path has not yet been tested end-to-end.** Everything up to and
+  including staging a slot in the cart has been verified against live accounts;
+  the three calls that create the order, charge the card and finalize were built
+  from the booking site's own code but have never been executed. That is exactly
+  what [Full test run](#full-test-run) step 3 is for. Until it has been done
+  once, treat `--dry-run` as the trustworthy mode.
+- **Alondra is really three courses** — the main 18, a Par 3, and a rental-only
+  driving range. The bot searches the two real ones, so it sees tee times the
+  website's default view hides. Results are labelled with which course they're on.
+- **Los Verdes caps some rates at one booking per day per account.**
+- **Cart holds last 5 minutes.** The bot finishes well inside that, but if you
+  get the 3-D Secure link, that's your window.
+- **Keep the computer awake.** A sleeping laptop misses the drop. Turn off sleep
+  in Windows power settings for the evening, or leave the machine plugged in.
+- `config.json` holds a password and card in plain text. Anyone with access to
+  that folder can read them.

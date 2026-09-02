@@ -1,0 +1,8 @@
+config.json
+*.session
+__pycache__/
+*.pyc
+.venv/
+venv/
+logs/
+teesniper-for-friend.zip

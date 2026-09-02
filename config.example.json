@@ -1,0 +1,16 @@
+{
+  "username": "you@example.com",
+  "password": "your-teeitup-password",
+  "phone": "13105551234",
+  "email_opt_in": false,
+  "sms_opt_in": false,
+  "setup_complete": false,
+  "card": {
+    "number": "",
+    "exp_month": "",
+    "exp_year": "",
+    "cvv": "",
+    "name": "",
+    "zip": ""
+  }
+}
