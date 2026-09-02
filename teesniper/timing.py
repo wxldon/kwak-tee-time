@@ -37,18 +37,30 @@ def seconds_until_release(play_date: dt.date, now: dt.datetime | None = None) ->
     return (release_time_for(play_date) - (now or now_local())).total_seconds()
 
 
-def sleep_until(target: dt.datetime, spin_window: float = 2.0) -> None:
+def sleep_until(
+    target: dt.datetime,
+    spin_window: float = 2.0,
+    should_stop=None,
+) -> bool:
     """Sleep until ``target``, then busy-wait the last ``spin_window`` seconds.
 
     ``time.sleep`` on Windows only resolves to ~15ms, which is a lot of slack
     when hundreds of people hit the same drop. Coarse-sleep most of the way,
     then spin so we fire within a millisecond of the mark.
+
+    Wakes every half second to check ``should_stop`` so a cancelled run does
+    not sit in a 30-second sleep. Returns False if it was asked to stop.
     """
     while True:
+        if should_stop is not None and should_stop():
+            return False
         remaining = (target - dt.datetime.now(TZ)).total_seconds()
         if remaining <= spin_window:
             break
-        time.sleep(min(remaining - spin_window, 30.0))
+        time.sleep(min(remaining - spin_window, 0.5))
 
     while (target - dt.datetime.now(TZ)).total_seconds() > 0:
+        if should_stop is not None and should_stop():
+            return False
         time.sleep(0.0005)
+    return True

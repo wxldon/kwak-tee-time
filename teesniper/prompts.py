@@ -63,8 +63,9 @@ def ask(question: str, default: str | None = None) -> str:
             raw = input(f"{question}{suffix}: ").strip()
         except EOFError:
             # Non-interactive (piped/redirected stdin): take the default.
+            # input() has already echoed the prompt; just complete the line.
             if default is not None:
-                print(f"{question}{suffix}: {default}")
+                print(default)
                 return default
             raise
         if raw:

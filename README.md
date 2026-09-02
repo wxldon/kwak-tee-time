@@ -232,6 +232,37 @@ Leave the window open. At 7:58:45 PM it wakes up, and at 8:00:00 it goes.
 
 `7am` · `7:30 am` · `7` · `14:00` · `2:30pm`
 
+### Cancelling a snipe
+
+Press **Ctrl-C** in the window. It tells both courses to stand down, waits for
+them to finish whatever they were doing, and confirms what happened:
+
+```
+  Cancelling -- waiting for both courses to stand down...
+  Cancelled. Nothing was booked and nothing was charged.
+```
+
+Closing the window works too, but Ctrl-C is better: it gives the bot a moment
+to release any tee time it was holding in the cart, rather than leaving it
+parked until the 5-minute hold lapses.
+
+If a payment was already in flight when you cancelled, it says so instead —
+check your reservations before running it again.
+
+To change your mind about a booking the bot already made, cancel it on the
+course's own website; this tool books, it does not cancel reservations.
+
+### What the exit codes mean
+
+Useful if you run it from a scheduled task.
+
+| Code | Meaning |
+|---|---|
+| `0` | Booked |
+| `1` | Nothing matched, or setup was incomplete |
+| `2` | **Needs your attention** — a payment may have gone through |
+| `130` | You cancelled with Ctrl-C |
+
 ---
 
 ## All commands

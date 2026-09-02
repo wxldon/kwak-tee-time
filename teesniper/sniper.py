@@ -121,7 +121,8 @@ def hunt(
         status(f"Drop at {release:%a %b %d %I:%M:%S %p %Z} -- waiting {_fmt(wait)}")
         # Warm the connection and capture a baseline ETag on the locked day.
         if wait > 90:
-            sleep_until(release - dt.timedelta(seconds=75))
+            if not sleep_until(release - dt.timedelta(seconds=75), should_stop=should_stop):
+                return False
             try:
                 poller.poll()
                 status("Connection warm, baseline ETag captured.")
@@ -129,6 +130,8 @@ def hunt(
                 log.debug("warmup poll failed: %s", e)
             # Gentle keepalive so the socket and TLS session stay hot.
             while seconds_until_release(target.play_date) > lead_seconds + 1:
+                if should_stop is not None and should_stop():
+                    return False
                 time.sleep(2.0)
                 try:
                     # Keep the ETag current, but never discard real inventory:
@@ -141,7 +144,10 @@ def hunt(
                             return True
                 except (ApiError, requests.RequestException):
                     pass
-        sleep_until(release - dt.timedelta(seconds=lead_seconds))
+        if not sleep_until(
+            release - dt.timedelta(seconds=lead_seconds), should_stop=should_stop
+        ):
+            return False
         status("Go time.")
     else:
         status("Date is already open -- searching now.")

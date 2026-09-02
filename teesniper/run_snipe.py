@@ -6,6 +6,7 @@ import datetime as dt
 import enum
 import logging
 import threading
+import time
 
 import requests
 
@@ -266,13 +267,35 @@ def cmd_snipe(args) -> int:
         )
         threads.append(th)
         th.start()
-    for th in threads:
-        th.join()
+    cancelled = False
+    try:
+        # join() in short slices, so Ctrl-C reaches us promptly instead of
+        # blocking in a single uninterruptible wait.
+        while any(t.is_alive() for t in threads):
+            for t in threads:
+                t.join(timeout=0.2)
+    except KeyboardInterrupt:
+        cancelled = True
+        stop.set()
+        print("\n  Cancelling -- waiting for both courses to stand down...")
+        deadline = time.monotonic() + 10.0
+        while any(t.is_alive() for t in threads) and time.monotonic() < deadline:
+            for t in threads:
+                t.join(timeout=0.2)
 
     if results:
         for c in results.values():
             print(f"\n  Got it: {c.label()}")
         return 0
+    if cancelled:
+        if needs_attention:
+            for c in needs_attention.values():
+                print(f"\n  NEEDS YOUR ATTENTION: {c.label()}")
+            print("  Cancelled, but a payment was already in flight -- check your")
+            print("  reservations and your statement before running this again.")
+            return 2
+        print("  Cancelled. Nothing was booked and nothing was charged.")
+        return 130
     if needs_attention:
         for c in needs_attention.values():
             print(f"\n  NEEDS YOUR ATTENTION: {c.label()}")
