@@ -413,6 +413,11 @@ it sleeps until the drop.
 
 ## Known limits
 
+- **If anything goes wrong after the card is charged, the bot stops.** It will
+  never move on to another slot once payment has been submitted, because that
+  is how a bot charges you twice. If you see lines beginning `!!`, read them:
+  the money may have moved, and you should check your reservations and your
+  statement before running it again. Exit code 2 means exactly that.
 - **The payment path has not yet been tested end-to-end.** Everything up to and
   including staging a slot in the cart has been verified against live accounts;
   the three calls that create the order, charge the card and finalize were built

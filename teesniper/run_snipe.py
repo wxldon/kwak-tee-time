@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import datetime as dt
+import enum
 import logging
 import threading
+
+import requests
 
 from . import booking, checkout, prompts
 from .api import ApiError, TeeItUpClient
@@ -23,6 +26,19 @@ def _status(prefix: str):
     return emit
 
 
+class Outcome(enum.Enum):
+    """What happened on one booking attempt.
+
+    The distinction that matters is TRY_NEXT versus everything else. TRY_NEXT is
+    the ONLY value that lets the caller attempt another slot, and it is only
+    ever returned from a path where the card was definitely not charged.
+    """
+
+    BOOKED = "booked"        # confirmed; stop
+    TRY_NEXT = "try_next"    # nothing was charged; another slot is fine
+    STOP = "stop"            # money may have moved, or a human is needed
+
+
 def book_candidate(
     client: TeeItUpClient,
     c: Candidate,
@@ -30,14 +46,15 @@ def book_candidate(
     cfg: Config,
     dry_run: bool,
     say,
-) -> bool:
+) -> Outcome:
     """Take one candidate all the way to a paid booking.
 
-    Returns True only when the booking is actually confirmed. Anything that
-    means "this slot is gone" returns False so the caller can try the next one.
+    Every failure after the charge is submitted returns STOP, never TRY_NEXT --
+    retrying past that point is how a bot charges a card twice.
     """
     cart_id = None
     cart_item_id = None
+    charged = False
     try:
         cart_id = booking.create_cart(client)
         cart = booking.add_to_cart(client, cart_id, c, players)
@@ -47,13 +64,15 @@ def book_candidate(
         if dry_run:
             say("Dry run -- stopping before payment. Releasing the cart.")
             booking.delete_cart(client, cart_id)
-            return True
+            return Outcome.BOOKED
 
         order = checkout.create_order(client, cart_id, cart_item_id, c, players)
         say("Order created; requesting payment token.")
 
         token = checkout.get_tr_token(client)
         payload = checkout.build_tr_payload(client, order, c, players, cfg)
+
+        charged = True  # anything from here on may have taken money
         result = checkout.add_reservation(client, payload, token)
         say("Payment accepted.")
 
@@ -65,37 +84,66 @@ def book_candidate(
             or "(see your account)"
         )
         say(f"BOOKED -- confirmation {conf}")
-        return True
+        return Outcome.BOOKED
 
     except booking.SlotGone as e:
         say(f"Slot gone: {e}")
         if cart_id:
             booking.delete_cart(client, cart_id)
-        return False
+        return Outcome.TRY_NEXT
 
     except checkout.PaymentPending as e:
-        say("The card needs 3-D Secure, which this bot cannot complete.")
-        say(f"Finish it in a browser within {CART_HOLD_MINUTES} minutes: {e.redirect_url}")
-        return True  # stop hunting; a human must take over
+        say("!! The card needs 3-D Secure, which this bot cannot complete.")
+        say(f"!! NOT BOOKED YET. Finish it in a browser within "
+            f"{CART_HOLD_MINUTES} minutes: {e.redirect_url}")
+        return Outcome.STOP
+
+    except checkout.ChargeUncertain as e:
+        say("!! THE CARD MAY HAVE BEEN CHARGED -- do not run this again yet.")
+        say(f"!! {e}")
+        say("!! Check your email and your reservations before retrying.")
+        return Outcome.STOP
+
+    except checkout.FinalizeFailed as e:
+        say("!! THE CARD WAS CHARGED but the course did not confirm the booking.")
+        say(f"!! {e}")
+        say("!! Check your reservations and your statement before retrying.")
+        return Outcome.STOP
 
     except checkout.CheckoutError as e:
-        say(f"Checkout failed: {e}")
+        # Raised only on paths where the charge was rejected outright.
+        say(f"Payment declined or rejected: {e}")
         if cart_id and cart_item_id:
             checkout.mark_failed(client, cart_id, cart_item_id, players)
             booking.delete_cart(client, cart_id)
-        return False
+        # A declined card will decline on the next slot too -- do not burn
+        # three more attempts against it.
+        return Outcome.STOP
 
-    except ApiError as e:
-        if e.is_auth_error:
-            raise
-        say(f"API error {e.status}: {e.body}")
+    except (ApiError, requests.RequestException) as e:
+        if charged:
+            say("!! THE CARD MAY HAVE BEEN CHARGED -- do not run this again yet.")
+            say(f"!! {e}")
+            say("!! Check your email and your reservations before retrying.")
+            return Outcome.STOP
+        say(f"Booking call failed: {e}")
         if cart_id:
             booking.delete_cart(client, cart_id)
-        return False
+        return Outcome.TRY_NEXT
+
+    except Exception as e:  # noqa: BLE001 -- last line of defence around money
+        if charged:
+            say("!! THE CARD MAY HAVE BEEN CHARGED -- do not run this again yet.")
+            say(f"!! unexpected error after payment: {e!r}")
+            return Outcome.STOP
+        say(f"Unexpected error before payment: {e!r}")
+        if cart_id:
+            booking.delete_cart(client, cart_id)
+        return Outcome.TRY_NEXT
 
 
 def _run_one(course, target: Target, cfg: Config, args, stop: threading.Event,
-             results: dict, claim: threading.Lock) -> None:
+             results: dict, claim: threading.Lock, needs_attention: dict) -> None:
     say = _status(course.key)
     try:
         client = TeeItUpClient(course)
@@ -111,19 +159,31 @@ def _run_one(course, target: Target, cfg: Config, args, stop: threading.Event,
             return True
         for c in cands[: args.tries]:
             # One booking total across all courses: whoever gets the lock first
-            # books, everyone else stands down. Without this, searching "both"
-            # would happily buy two tee times.
+            # attempts, everyone else stands down. Without this, searching
+            # "both" would happily buy two tee times.
             with claim:
                 if stop.is_set():
                     return True
-                if book_candidate(client, c, target.players, cfg, args.dry_run, say):
+                outcome = book_candidate(client, c, target.players, cfg, args.dry_run, say)
+                if outcome is Outcome.BOOKED:
                     stop.set()
                     results[course.key] = c
+                    return True
+                if outcome is Outcome.STOP:
+                    # Money may have moved, or a human has to finish it. Stand
+                    # the other course down rather than buying a second slot.
+                    stop.set()
+                    needs_attention[course.key] = c
                     return True
         return False
 
     try:
-        got = hunt(poller, on_hit, deadline_seconds=args.deadline, status=say)
+        got = hunt(
+            poller, on_hit,
+            deadline_seconds=args.deadline,
+            status=say,
+            should_stop=stop.is_set,
+        )
         if not got and not stop.is_set():
             say("Window closed without a booking.")
     except ApiError as e:
@@ -138,6 +198,9 @@ def cmd_snipe(args) -> int:
     cfg = ensure_setup(need_card=not args.dry_run)
 
     date = prompts.parse_date(args.date) if args.date else prompts.ask_date()
+    if args.players is not None and not 1 <= args.players <= 4:
+        print(f"  --players must be between 1 and 4 (got {args.players}).")
+        return 1
     players = args.players or prompts.ask_players()
     if args.course in ("both", "all"):
         keys = list(COURSES) if args.course == "all" else list(DEFAULT_COURSE_KEYS)
@@ -146,11 +209,14 @@ def cmd_snipe(args) -> int:
         courses = [COURSES[args.course]]
     else:
         courses = prompts.ask_courses()
-    if args.start and args.end:
+    if args.start or args.end:
+        if not (args.start and args.end):
+            print("  Give both --start and --end, or neither.")
+            return 1
         start, end = prompts.parse_time(args.start), prompts.parse_time(args.end)
     else:
         start, end = prompts.ask_time_range()
-    holes = args.holes
+    holes = args.holes if args.holes else prompts.ask_holes()
     walking = args.walking if args.walking is not None else prompts.ask_transport()
 
     if not args.dry_run and not cfg.card.filled:
@@ -189,12 +255,14 @@ def cmd_snipe(args) -> int:
     stop = threading.Event()
     claim = threading.Lock()
     results: dict = {}
+    needs_attention: dict = {}
     threads = []
     for course in courses:
         t = target_for()
         t.course = course
         th = threading.Thread(
-            target=_run_one, args=(course, t, cfg, args, stop, results, claim), daemon=True
+            target=_run_one,
+            args=(course, t, cfg, args, stop, results, claim, needs_attention), daemon=True
         )
         threads.append(th)
         th.start()
@@ -205,5 +273,12 @@ def cmd_snipe(args) -> int:
         for c in results.values():
             print(f"\n  Got it: {c.label()}")
         return 0
+    if needs_attention:
+        for c in needs_attention.values():
+            print(f"\n  NEEDS YOUR ATTENTION: {c.label()}")
+        print("  Read the messages above -- the card may have been charged, or a")
+        print("  3-D Secure step may be waiting. Check your reservations and your")
+        print("  statement before running this again.")
+        return 2
     print("\n  No booking made.")
     return 1

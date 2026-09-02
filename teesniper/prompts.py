@@ -9,8 +9,9 @@ import re
 from .courses import COURSES, DEFAULT_COURSE_KEYS, MAX_DAYS_OUT
 from .timing import TZ, now_local, release_time_for
 
+# "7am" and "19:00" are unambiguous; a bare "7" is not, so it is not accepted.
 _TIME_PATTERNS = (
-    "%I:%M %p", "%I:%M%p", "%I %p", "%I%p", "%H:%M", "%H",
+    "%I:%M %p", "%I:%M%p", "%I %p", "%I%p", "%H:%M",
 )
 
 
@@ -23,6 +24,13 @@ def parse_time(text: str) -> dt.time:
             return dt.datetime.strptime(t.upper(), fmt).time()
         except ValueError:
             continue
+    if t.isdigit() and 0 <= int(t) <= 23:
+        n = int(t)
+        if n > 12:
+            raise ValueError(f"{text!r} is ambiguous -- write '{n:02d}:00' for {n % 12} pm")
+        raise ValueError(
+            f"{text!r} is ambiguous -- say '{n}am' or '{n}pm' (or '{n:02d}:00' for 24-hour)"
+        )
     raise ValueError(f"Could not read a time from {text!r} (try '7:30 am' or '14:00')")
 
 
@@ -113,6 +121,10 @@ def ask_time_range() -> tuple[dt.time, dt.time]:
         except ValueError as e:
             print(f"  {e}")
             continue
+        if start > end:
+            print(f"  {start:%I:%M %p} is after {end:%I:%M %p} -- did you swap them?")
+            if not ask_yes("  Search overnight, from the earliest time through midnight?", "n"):
+                continue
         return start, end
 
 
@@ -146,10 +158,13 @@ def ask_players() -> int:
 
 
 def ask_holes() -> int | None:
-    raw = ask("Holes -- 9, 18, or 'any'", "any").lower()
-    if raw in ("9", "18"):
-        return int(raw)
-    return None
+    while True:
+        raw = ask("Holes -- 9, 18, or 'any'", "any").lower()
+        if raw in ("9", "18"):
+            return int(raw)
+        if raw in ("any", "either", ""):
+            return None
+        print("  Enter 9, 18, or 'any'.")
 
 
 def ask_transport() -> bool | None:

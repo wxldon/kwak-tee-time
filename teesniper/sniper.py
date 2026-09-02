@@ -6,6 +6,8 @@ import datetime as dt
 import logging
 import random
 import time
+
+import requests
 from dataclasses import dataclass
 from typing import Callable
 
@@ -99,6 +101,7 @@ def hunt(
     hot_rate: float = 4.0,
     lead_seconds: float = 3.0,
     status: Callable[[str], None] = lambda m: None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> bool:
     """Wait for the drop, then hammer until a matching slot is claimed.
 
@@ -122,14 +125,21 @@ def hunt(
             try:
                 poller.poll()
                 status("Connection warm, baseline ETag captured.")
-            except ApiError as e:
+            except (ApiError, requests.RequestException) as e:
                 log.debug("warmup poll failed: %s", e)
             # Gentle keepalive so the socket and TLS session stay hot.
             while seconds_until_release(target.play_date) > lead_seconds + 1:
                 time.sleep(2.0)
                 try:
-                    poller.poll()
-                except ApiError:
+                    # Keep the ETag current, but never discard real inventory:
+                    # if the drop lands early, act on it instead of throwing it
+                    # away and waiting for the next poll.
+                    early = poller.poll()
+                    if early:
+                        status("Inventory appeared early -- going now.")
+                        if on_hit(early):
+                            return True
+                except (ApiError, requests.RequestException):
                     pass
         sleep_until(release - dt.timedelta(seconds=lead_seconds))
         status("Go time.")
@@ -139,6 +149,8 @@ def hunt(
     interval = 1.0 / hot_rate
     started = time.monotonic()
     while time.monotonic() - started < deadline_seconds:
+        if should_stop is not None and should_stop():
+            return False
         loop_start = time.monotonic()
         try:
             cands = poller.poll()
@@ -155,12 +167,19 @@ def hunt(
                 status("Blocked by the WAF -- backing off. Check the request params.")
                 time.sleep(5.0)
             elif e.status == 401:
-                status("Session expired -- re-authenticating.")
+                status("Session expired -- stopping this course.")
                 raise
             elif e.status >= 500 or e.status == 429:
                 time.sleep(0.5)
             else:
                 raise
+        except requests.RequestException as e:
+            # A dropped connection or a slow response must never end the hunt --
+            # this loop runs at exactly the moment everyone else is hammering
+            # the same server, so blips are expected.
+            poller.stats.errors += 1
+            log.debug("poll failed, retrying: %s", e)
+            time.sleep(0.25)
         # Jitter keeps us off exact second boundaries.
         elapsed = time.monotonic() - loop_start
         time.sleep(max(0.0, interval - elapsed) + random.uniform(0, 0.05))

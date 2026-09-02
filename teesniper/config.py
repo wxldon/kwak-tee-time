@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -62,11 +62,14 @@ class Config:
 
     @classmethod
     def load_or_empty(cls) -> "Config":
-        """Like ``load`` but returns a blank config instead of exiting."""
-        try:
-            return cls.load()
-        except SystemExit:
+        """Like ``load`` but returns a blank config when there simply isn't one.
+
+        A corrupt file still stops the run -- silently starting from blank would
+        throw away a password the user thinks is saved.
+        """
+        if not config_path().exists():
             return cls()
+        return cls.load()
 
     @classmethod
     def load(cls) -> "Config":
@@ -77,8 +80,18 @@ class Config:
                 f"No {CONFIG_NAME} found at {path}.\n"
                 f"Run:  {how}"
             )
-        data: dict[str, Any] = json.loads(path.read_text())
-        card = Card(**(data.get("card") or {}))
+        try:
+            data: dict[str, Any] = json.loads(path.read_text())
+        except json.JSONDecodeError as e:
+            raise SystemExit(
+                f"{path} is not valid JSON ({e}).\n"
+                f"Fix it, or delete it and run setup again."
+            ) from e
+        if not isinstance(data, dict):
+            raise SystemExit(f"{path} should contain a JSON object.")
+        raw_card = data.get("card") or {}
+        known = {f.name for f in fields(Card)}
+        card = Card(**{k: v for k, v in raw_card.items() if k in known})
         return cls(
             username=data.get("username", ""),
             password=data.get("password", ""),
