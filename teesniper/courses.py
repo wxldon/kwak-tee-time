@@ -61,20 +61,40 @@ LOS_VERDES = Course(
     ),
 )
 
+# Alondra's booking site fronts three GolfNow facilities under one alias: the
+# regulation course, a par-3 course, and a rental-only driving range. They are
+# offered as separate choices because the par-3's rates are ALSO labelled
+# "9"/"18 holes" -- so folding it in would let a request for 18 holes quietly
+# book an 18-hole par-3 round, which is not the same game.
 ALONDRA_PARK = Course(
     key="alondra",
-    name="Alondra Park Golf Courses",
+    name="Alondra Park Golf Course",
     alias="alondra-park-golf-courses",
     entity_id="58ba11ecd08b967f00a5c615",
     site="https://alondra-park-golf-courses.book.teeitup.com",
     subcourses=(
         SubCourse(15142, "58ba11ecd08b967f00a5c615", "Alondra Park Golf Course"),
-        SubCourse(9546, "54f14f000c8ad60378b05ba9", "Alondra Park Par 3"),
-        SubCourse(19776, "6862f4445fe3e25bf432e2e6", "Driving Range", bookable=False),
     ),
 )
 
-COURSES = {c.key: c for c in (LOS_VERDES, ALONDRA_PARK)}
+ALONDRA_PAR3 = Course(
+    key="alondra-par3",
+    name="Alondra Park Par 3",
+    alias="alondra-park-golf-courses",
+    entity_id="58ba11ecd08b967f00a5c615",
+    site="https://alondra-park-golf-courses.book.teeitup.com",
+    subcourses=(
+        SubCourse(9546, "54f14f000c8ad60378b05ba9", "Alondra Park Par 3"),
+    ),
+)
+
+# Not a tee time at all -- listed so it is obvious it was considered and skipped.
+DRIVING_RANGE_FACILITY_ID = 19776
+
+COURSES = {c.key: c for c in (LOS_VERDES, ALONDRA_PARK, ALONDRA_PAR3)}
+
+# What "both" means on the CLI: the two regulation courses.
+DEFAULT_COURSE_KEYS = ("losverdes", "alondra")
 
 # Booking window, from GET /settings on both courses and verified against the
 # "available to book from ..." message the API returns for future dates.

@@ -6,7 +6,7 @@ import datetime as dt
 import getpass
 import re
 
-from .courses import COURSES, MAX_DAYS_OUT
+from .courses import COURSES, DEFAULT_COURSE_KEYS, MAX_DAYS_OUT
 from .timing import TZ, now_local, release_time_for
 
 _TIME_PATTERNS = (
@@ -119,16 +119,22 @@ def ask_time_range() -> tuple[dt.time, dt.time]:
 def ask_courses() -> list:
     print("\n  1) Los Verdes")
     print("  2) Alondra Park")
-    print("  3) Both")
+    print("  3) Both of the above")
+    print("  4) Alondra Park Par 3  (a short par-3 course, not a regulation round)")
+    print("  5) All three")
     while True:
-        choice = ask("Course", "3")
+        choice = ask("Course", "3").lower()
         if choice in ("1", "losverdes", "lv"):
             return [COURSES["losverdes"]]
         if choice in ("2", "alondra", "ap"):
             return [COURSES["alondra"]]
         if choice in ("3", "both"):
-            return [COURSES["losverdes"], COURSES["alondra"]]
-        print("  Pick 1, 2, or 3.")
+            return [COURSES[k] for k in DEFAULT_COURSE_KEYS]
+        if choice in ("4", "par3", "alondra-par3"):
+            return [COURSES["alondra-par3"]]
+        if choice in ("5", "all"):
+            return list(COURSES.values())
+        print("  Pick 1-5.")
 
 
 def ask_players() -> int:

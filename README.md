@@ -185,7 +185,9 @@ Holes -- 9, 18, or 'any' [any]: 18
 
   1) Los Verdes
   2) Alondra Park
-  3) Both
+  3) Both of the above
+  4) Alondra Park Par 3  (a short par-3 course, not a regulation round)
+  5) All three
 Course [3]:
 ```
 
@@ -235,13 +237,26 @@ Leave the window open. At 7:58:45 PM it wakes up, and at 8:00:00 it goes.
 | `snipe.bat card` | Add or replace the card |
 | `snipe.bat init` | Re-enter login *and* card from scratch |
 
+### Choosing a course
+
+| Value | What you get |
+|---|---|
+| `losverdes` | Los Verdes |
+| `alondra` | Alondra Park, the regulation course |
+| `alondra-par3` | Alondra Park Par 3 — a short course, cheap and quick |
+| `both` | Los Verdes + Alondra regulation (the usual choice) |
+| `all` | The above plus the par 3 |
+
+With more than one course it watches them together and books **one** tee time —
+whichever produces a match first, never two.
+
 ### Flags for `snipe` and `list`
 
 | Flag | Meaning | Default |
 |---|---|---|
 | `-d`, `--date` | Play date | asked |
 | `-p`, `--players` | 1–4 | asked |
-| `-c`, `--course` | `losverdes`, `alondra`, `both` | asked |
+| `-c`, `--course` | `losverdes`, `alondra`, `alondra-par3`, `both`, `all` | asked |
 | `-s`, `--start` | Earliest acceptable time | asked |
 | `-e`, `--end` | Latest acceptable time | asked |
 | `--holes` | `9` or `18` | either |
@@ -359,9 +374,13 @@ it sleeps until the drop.
   from the booking site's own code but have never been executed. That is exactly
   what [Full test run](#full-test-run) step 3 is for. Until it has been done
   once, treat `--dry-run` as the trustworthy mode.
-- **Alondra is really three courses** — the main 18, a Par 3, and a rental-only
-  driving range. The bot searches the two real ones, so it sees tee times the
-  website's default view hides. Results are labelled with which course they're on.
+- **Alondra is really three courses** behind one booking page: the regulation
+  course, a **par 3**, and a rental-only driving range. They are separate
+  choices here, because the par 3's rates are *also* labelled "9 holes" and
+  "18 holes" — so lumping them together would let a request for 18 holes quietly
+  book an 18-hole par-3 round. `alondra` means the regulation course; pick
+  `alondra-par3` (or `all`) if you actually want the short course. The driving
+  range is never booked. Every result says which course it is on.
 - **Los Verdes caps some rates at one booking per day per account.**
 - **Cart holds last 5 minutes.** The bot finishes well inside that, but if you
   get the 3-D Secure link, that's your window.

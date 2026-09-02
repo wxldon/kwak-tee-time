@@ -9,7 +9,7 @@ import threading
 from . import booking, checkout, prompts
 from .api import ApiError, TeeItUpClient
 from .config import Config
-from .courses import CART_HOLD_MINUTES, COURSES
+from .courses import CART_HOLD_MINUTES, COURSES, DEFAULT_COURSE_KEYS
 from .search import Candidate
 from .sniper import Poller, Target, hunt
 from .timing import release_time_for, seconds_until_release
@@ -139,11 +139,13 @@ def cmd_snipe(args) -> int:
 
     date = prompts.parse_date(args.date) if args.date else prompts.ask_date()
     players = args.players or prompts.ask_players()
-    courses = (
-        list(COURSES.values()) if args.course == "both"
-        else [COURSES[args.course]] if args.course
-        else prompts.ask_courses()
-    )
+    if args.course in ("both", "all"):
+        keys = list(COURSES) if args.course == "all" else list(DEFAULT_COURSE_KEYS)
+        courses = [COURSES[k] for k in keys]
+    elif args.course:
+        courses = [COURSES[args.course]]
+    else:
+        courses = prompts.ask_courses()
     if args.start and args.end:
         start, end = prompts.parse_time(args.start), prompts.parse_time(args.end)
     else:

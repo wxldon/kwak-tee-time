@@ -10,7 +10,7 @@ import sys
 from . import prompts
 from .api import ApiError, TeeItUpClient
 from .config import Card, Config, config_path
-from .courses import COURSES
+from .courses import COURSES, DEFAULT_COURSE_KEYS
 from .search import extract_candidates, filter_and_rank
 from .sniper import Poller, Target, hunt
 from .timing import now_local, release_time_for, seconds_until_release
@@ -146,8 +146,9 @@ def cmd_check(args) -> int:
 
 
 def _pick_courses(choice: str | None) -> list:
-    if choice == "both":
-        return list(COURSES.values())
+    if choice in ("both", "all"):
+        keys = list(COURSES) if choice == "all" else list(DEFAULT_COURSE_KEYS)
+        return [COURSES[k] for k in keys]
     if choice:
         return [COURSES[choice]]
     return prompts.ask_courses()
@@ -220,7 +221,10 @@ def build_parser() -> argparse.ArgumentParser:
         s = sub.add_parser(name, help=help_text)
         s.add_argument("-d", "--date")
         s.add_argument("-p", "--players", type=int)
-        s.add_argument("-c", "--course", choices=sorted(COURSES) + ["both"])
+        s.add_argument(
+            "-c", "--course", choices=sorted(COURSES) + ["both", "all"],
+            help="'both' = the two regulation courses; 'all' adds the par 3",
+        )
         s.add_argument("-s", "--start")
         s.add_argument("-e", "--end")
         s.add_argument("--holes", type=int, choices=(9, 18))
