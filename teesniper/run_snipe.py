@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import enum
 import logging
+import random
 import threading
 import time
 
@@ -182,6 +183,10 @@ def _run_one(course, target: Target, cfg: Config, args, stop: threading.Event,
         got = hunt(
             poller, on_hit,
             deadline_seconds=args.deadline,
+            # Jitter the lead so the two courses do not fire the identical
+            # first request from one IP at the identical microsecond. Both
+            # still start comfortably ahead of the drop.
+            lead_seconds=3.0 - random.uniform(0.0, 0.3),
             status=say,
             should_stop=stop.is_set,
         )
@@ -236,6 +241,16 @@ def cmd_snipe(args) -> int:
     print(f"    Transport {'either' if walking is None else ('walking' if walking else 'riding')}")
     print(f"    Courses  {', '.join(c.name for c in courses)}")
     print(f"    Card     {cfg.card.masked}")
+    card_problems = cfg.card.problems
+    if card_problems and not args.dry_run:
+        # Better to refuse now than to win the slot and fail at the charge,
+        # hours later, with nobody watching.
+        print("\n  That card will be declined:")
+        for why in card_problems:
+            print(f"    - {why}")
+        from .__main__ import _runner
+        print(f"  Fix it first:  {_runner()} card      (then run this again)")
+        return 1
     if wait > 0:
         print(f"    Opens    {rel:%a %b %d %I:%M %p %Z}  (in {int(wait//3600)}h {int(wait%3600//60)}m)")
     else:

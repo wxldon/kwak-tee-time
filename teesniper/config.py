@@ -24,6 +24,18 @@ def config_path() -> Path:
     return Path(__file__).resolve().parent.parent / CONFIG_NAME
 
 
+def _luhn_ok(digits: str) -> bool:
+    total, parity = 0, len(digits) % 2
+    for i, ch in enumerate(digits):
+        n = int(ch)
+        if i % 2 == parity:
+            n *= 2
+            if n > 9:
+                n -= 9
+        total += n
+    return total % 10 == 0
+
+
 @dataclass
 class Card:
     number: str = ""
@@ -36,6 +48,56 @@ class Card:
     @property
     def filled(self) -> bool:
         return bool(self.number and self.exp_month and self.exp_year)
+
+    @property
+    def problems(self) -> list[str]:
+        """Everything obviously wrong with this card, in plain English.
+
+        Catching a typo here is worth a lot: the alternative is discovering it
+        at 8:00:00 PM, after the bot has already won the slot, when there is no
+        time left to fix anything.
+        """
+        import datetime as _dt
+
+        out: list[str] = []
+        digits = "".join(ch for ch in self.number if ch.isdigit())
+        if not digits:
+            out.append("no card number")
+        elif not 13 <= len(digits) <= 19:
+            out.append(f"card number is {len(digits)} digits (expected 13-19)")
+        elif not _luhn_ok(digits):
+            out.append("card number fails its checksum -- likely a typo")
+
+        try:
+            month = int(self.exp_month)
+            if not 1 <= month <= 12:
+                raise ValueError
+        except (TypeError, ValueError):
+            out.append(f"expiry month {self.exp_month!r} is not 01-12")
+            month = None
+        try:
+            year = int(self.exp_year)
+            year += 2000 if year < 100 else 0
+        except (TypeError, ValueError):
+            out.append(f"expiry year {self.exp_year!r} is not a year")
+            year = None
+        if month and year:
+            today = _dt.date.today()
+            if (year, month) < (today.year, today.month):
+                out.append(f"card expired {month:02d}/{year}")
+
+        cvv = "".join(ch for ch in self.cvv if ch.isdigit())
+        if not 3 <= len(cvv) <= 4:
+            out.append(f"CVV is {len(cvv)} digits (expected 3 or 4)")
+        if not self.name.strip():
+            out.append("no name on card")
+        if len("".join(ch for ch in self.zip if ch.isdigit())) < 5:
+            out.append(f"billing ZIP {self.zip!r} is not 5 digits")
+        return out
+
+    @property
+    def usable(self) -> bool:
+        return not self.problems
 
     @property
     def masked(self) -> str:

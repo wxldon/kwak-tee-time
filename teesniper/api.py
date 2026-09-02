@@ -17,19 +17,39 @@ from .courses import API_BASE, Course
 log = logging.getLogger(__name__)
 
 # Match a real browser closely enough that we are not an obvious outlier.
+# The client hints below must agree with the user-agent: a request claiming to
+# be Chrome but missing the headers every Chrome sends is a louder signal than
+# not claiming to be Chrome at all. Bump _CHROME_MAJOR and both stay in step.
+_CHROME_MAJOR = "140"
 _UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+    f"(KHTML, like Gecko) Chrome/{_CHROME_MAJOR}.0.0.0 Safari/537.36"
 )
+_CLIENT_HINTS = {
+    "sec-ch-ua": (
+        f'"Chromium";v="{_CHROME_MAJOR}", "Not=A?Brand";v="24", '
+        f'"Google Chrome";v="{_CHROME_MAJOR}"'
+    ),
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    # The booking site and the API are different registrable domains.
+    "sec-fetch-site": "cross-site",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-dest": "empty",
+    "accept-encoding": "gzip, deflate, br",
+}
 
 
 class ApiError(RuntimeError):
     """Any non-2xx from the backend, with the parsed body attached."""
 
-    def __init__(self, status: int, body: Any, path: str):
+    def __init__(self, status: int, body: Any, path: str,
+                 retry_after: float | None = None):
         self.status = status
         self.body = body
         self.path = path
+        # Seconds the server asked us to wait, when it bothered to say.
+        self.retry_after = retry_after
         super().__init__(f"{path} -> HTTP {status}: {body}")
 
     @property
@@ -40,6 +60,26 @@ class ApiError(RuntimeError):
     def is_gone(self) -> bool:
         """Slot was claimed by someone else, or the hold lapsed."""
         return self.status in (404, 409, 410)
+
+
+def parse_retry_after(resp) -> float | None:
+    """Seconds from a Retry-After header, whether it is a delay or a date."""
+    raw = resp.headers.get("Retry-After")
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(raw.strip()))
+    except ValueError:
+        pass
+    try:
+        from email.utils import parsedate_to_datetime
+
+        when = parsedate_to_datetime(raw)
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=dt.timezone.utc)
+        return max(0.0, (when - dt.datetime.now(dt.timezone.utc)).total_seconds())
+    except (TypeError, ValueError):
+        return None
 
 
 class TeeItUpClient:
@@ -60,6 +100,7 @@ class TeeItUpClient:
                 "origin": course.origin,
                 "referer": course.origin + "/",
                 "user-agent": _UA,
+                **_CLIENT_HINTS,
             }
         )
         # Keep the TCP+TLS connection warm so the snipe request isn't paying
@@ -77,7 +118,7 @@ class TeeItUpClient:
         except ValueError:
             body = resp.text
         if not resp.ok:
-            raise ApiError(resp.status_code, body, path)
+            raise ApiError(resp.status_code, body, path, parse_retry_after(resp))
         return body
 
     def get(self, path: str, **kw) -> Any:

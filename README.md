@@ -51,8 +51,9 @@ Start it any time before the drop — hours early is fine. It then:
 1. **Computes the exact release moment** for your date.
 2. **Sleeps until 75 seconds out**, then wakes and opens a connection to the
    booking API so the handshake is already paid for.
-3. **Polls cheaply while it waits.** The API supports conditional requests, so
-   each check comes back empty ("nothing changed") until inventory appears.
+3. **Polls cheaply while it waits**, about once every 5 seconds. The API
+   supports conditional requests, so each check comes back empty ("nothing
+   changed") until inventory appears.
 4. **Starts its fast loop 3 seconds early.** The server's clock can't be read
    from outside, so a few seconds of lead absorbs the difference.
 5. **The instant the listing changes**, filters to your time window, player
@@ -64,6 +65,28 @@ It aims within about a millisecond of the target moment.
 
 Watching **both** courses at once is supported. It books **one** tee time —
 whichever course produces a match first — never two.
+
+### How hard it polls, and why
+
+The tee time is won or lost in the first few seconds after the drop, so that is
+where the effort goes — and nowhere else:
+
+| When | Rate | Why |
+|---|---|---|
+| Last 75 seconds before the drop | 1 request / 5s | Keeps the connection warm and catches an early release. |
+| Go-time to +10s | 5 / s | The decisive window. |
+| +10s to +30s | 1.5 / s | Stragglers and re-releases. |
+| +30s to the deadline | 0.5 / s | Only waiting for someone's 5-minute cart hold to lapse. |
+
+That is roughly **170 requests per course per run**, concentrated where it
+actually matters. A flat fast rate for the full three minutes would be four
+times the traffic for no better odds — and traffic is what gets an account
+flagged. A blocked account books nothing, so the two goals point the same way.
+
+If the server answers `429` (too many requests) or `403` (blocked), the bot
+**backs off** — honouring the server's own `Retry-After` when it sends one,
+otherwise doubling the wait each time. After five refusals in a row it stops
+that course rather than digging in.
 
 ---
 
@@ -169,6 +192,19 @@ Card:   ****1111  (ok)
   Los Verdes Golf Course: logged in as Alex Rivera
   Alondra Park Golf Courses: logged in as Alex Rivera
 ```
+
+---
+
+### The card is checked before it is used
+
+Whenever you enter or change a card, and again before a live snipe is armed,
+the details are sanity-checked locally — length, the card number's own
+checksum, expiry in the future, CVV length, ZIP. Nothing is sent anywhere to do
+this. A typo caught at the prompt costs you thirty seconds; the same typo
+caught at 8:00:00 PM costs you the tee time, because by then the bot has
+already won the slot and there is no time left to fix anything.
+
+`snipe.bat check` reports the same thing at any time.
 
 ---
 
@@ -466,6 +502,12 @@ it sleeps until the drop.
   apart. Pick one with `--walking` / `--riding`, or leave it and the bot takes
   whichever fits your window first.
 - **Los Verdes caps some rates at one booking per day per account.**
+- **Nothing here is invisible to the course.** It uses your real account and
+  your real card through the same API the website uses, and it is paced to look
+  unremarkable — but repeated 8:00 PM bookings from one account are visible to
+  staff whether or not a bot made them. Courses can and do cancel reservations
+  or suspend accounts for booking behaviour they dislike. Use it the way you
+  would book by hand.
 - **Cart holds last 5 minutes.** The bot finishes well inside that, but if you
   get the 3-D Secure link, that's your window.
 - **Keep the computer awake.** A sleeping laptop misses the drop. Turn off sleep

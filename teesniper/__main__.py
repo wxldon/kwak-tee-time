@@ -37,14 +37,27 @@ def _ask_card(optional: bool = False) -> Card:
     if not number:
         print("  Skipped -- run `snipe.bat card` before your first real booking.")
         return Card()
-    return Card(
-        number=number,
-        exp_month=prompts.ask("Expiry month (MM)"),
-        exp_year=prompts.ask("Expiry year (YYYY)"),
-        cvv=prompts.ask_secret("CVV"),
-        name=prompts.ask("Name on card"),
-        zip=prompts.ask("Billing ZIP"),
-    )
+    while True:
+        card = Card(
+            number=number,
+            exp_month=prompts.ask("Expiry month (MM)"),
+            exp_year=prompts.ask("Expiry year (YYYY)"),
+            cvv=prompts.ask_secret("CVV"),
+            name=prompts.ask("Name on card"),
+            zip=prompts.ask("Billing ZIP"),
+        )
+        problems = card.problems
+        if not problems:
+            return card
+        # A typo caught here costs 30 seconds; caught at the drop it costs the
+        # tee time.
+        print("\n  That does not look right:")
+        for why in problems:
+            print(f"    - {why}")
+        if not prompts.ask_yes("\n  Re-enter the card?", "y"):
+            return card
+        print()
+        number = prompts.ask_secret("Card number")
 
 
 def cmd_init(args) -> int:
@@ -135,7 +148,16 @@ def cmd_check(args) -> int:
     """Log in to both courses and show what the bot can see."""
     cfg = ensure_setup(need_card=False)
     print(f"Config: {config_path()}")
-    print(f"Card:   {cfg.card.masked}  ({'ok' if cfg.card.filled else 'NOT SET -- booking will fail'})\n")
+    problems = cfg.card.problems
+    if not cfg.card.filled:
+        print(f"Card:   {cfg.card.masked}  (NOT SET -- booking will fail)\n")
+    elif problems:
+        print(f"Card:   {cfg.card.masked}  (WILL BE DECLINED)")
+        for why in problems:
+            print(f"          - {why}")
+        print(f"        Fix it with:  {_runner()} card\n")
+    else:
+        print(f"Card:   {cfg.card.masked}  (ok)\n")
     for course in COURSES.values():
         try:
             c = _client(course, cfg)
