@@ -241,10 +241,25 @@ FLAGS  (snipe only)
       --deadline SECS     how long to keep hunting after the drop (default 180)
 
 EXAMPLES
-  {run} when 2026-09-15
-  {run} list -d tomorrow -p 2 -c both -s 6am -e 10am
-  {run} snipe -d 2026-09-15 -p 2 -c both -s 7am -e 10am --dry-run
-  {run} snipe -d 2026-09-15 -p 4 -c losverdes -s 7am -e 9am --holes 18 --riding
+
+  "When does September 15th open up for booking?"
+      {run} when 2026-09-15
+
+  "What can I get tomorrow morning for two, at either course?"
+      {run} list -d tomorrow -p 2 -c both -s 6am -e 10am
+
+  "Practice run for the 15th -- find and hold a slot, but do not pay."
+      {run} snipe -d 2026-09-15 -p 2 -c both -s 7am -e 10am --dry-run
+
+  "Book me a foursome at Los Verdes on the 15th, 18 holes with a cart,
+   teeing off between 7 and 9am."
+      {run} snipe -d 2026-09-15 -p 4 -c losverdes -s 7am -e 9am --holes 18 --riding
+
+  "Cheap walking round for two at the par 3, any time that afternoon."
+      {run} snipe -d 2026-09-15 -p 2 -c alondra-par3 -s 12pm -e 5pm --walking
+
+  "Set it and forget it -- do not ask me to confirm."
+      {run} snipe -d 2026-09-15 -p 2 -c both -s 7am -e 10am --yes
 
   Full documentation is in README.md
 """

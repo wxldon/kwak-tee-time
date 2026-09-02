@@ -293,15 +293,35 @@ whichever produces a match first, never two.
 
 ### Examples
 
+**"When does September 15th open up for booking?"**
 ```
-:: What's open at both courses tomorrow morning?
+snipe.bat when 2026-09-15
+```
+
+**"What can I get tomorrow morning for two, at either course?"**
+```
 snipe.bat list -d tomorrow -p 2 -c both -s 6am -e 10am
+```
 
-:: Practice run — goes through everything except payment
+**"Practice run for the 15th — find and hold a slot, but do not pay."**
+```
 snipe.bat snipe -d 2026-09-15 -p 2 -c both -s 7am -e 10am --dry-run
+```
 
-:: 18 holes at Los Verdes only, unattended
-snipe.bat snipe -d 2026-09-15 -p 4 -c losverdes -s 7am -e 9am --holes 18 --yes
+**"Book me a foursome at Los Verdes on the 15th, 18 holes with a cart, teeing
+off between 7 and 9am."**
+```
+snipe.bat snipe -d 2026-09-15 -p 4 -c losverdes -s 7am -e 9am --holes 18 --riding
+```
+
+**"Cheap walking round for two at the par 3, any time that afternoon."**
+```
+snipe.bat snipe -d 2026-09-15 -p 2 -c alondra-par3 -s 12pm -e 5pm --walking
+```
+
+**"Set it and forget it — do not ask me to confirm."**
+```
+snipe.bat snipe -d 2026-09-15 -p 2 -c both -s 7am -e 10am --yes
 ```
 
 ---
