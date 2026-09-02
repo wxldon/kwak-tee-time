@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import getpass
 import re
+import warnings
 
 from .courses import COURSES, DEFAULT_COURSE_KEYS, MAX_DAYS_OUT
 from .timing import TZ, now_local, release_time_for
@@ -67,7 +68,11 @@ def ask(question: str, default: str | None = None) -> str:
             if default is not None:
                 print(default)
                 return default
-            raise
+            raise SystemExit(
+                f"\n  Ran out of input while asking: {question}\n"
+                f"  Nothing was booked. Give this one on the command line "
+                f"instead -- see `help` for the flags."
+            )
         if raw:
             return raw
         if default is not None:
@@ -78,13 +83,20 @@ def ask_secret(question: str, allow_empty: bool = False) -> str:
     """Prompt without echoing -- for passwords, card numbers, CVVs."""
     while True:
         try:
-            raw = getpass.getpass(f"{question}: ").strip()
-        except (EOFError, getpass.GetPassWarning):
-            # Piped stdin has no tty; fall back to a normal read.
+            with warnings.catch_warnings():
+                # getpass warns (rather than raising) when it cannot hide input;
+                # promote that to an error so we never echo a card number by
+                # accident without saying so.
+                warnings.simplefilter("error", getpass.GetPassWarning)
+                raw = getpass.getpass(f"{question}: ").strip()
+        except getpass.GetPassWarning:
+            print("  (this console cannot hide typing -- it will be visible)")
             try:
                 raw = input(f"{question}: ").strip()
             except EOFError:
                 return ""
+        except EOFError:
+            return ""
         if raw or allow_empty:
             return raw
         print("  Required.")
@@ -185,4 +197,15 @@ def ask_transport() -> bool | None:
 
 
 def ask_yes(question: str, default: str = "n") -> bool:
-    return ask(question + " (y/n)", default).lower().startswith("y")
+    """Yes/no, re-asking on anything it does not recognise.
+
+    Treating unrecognised input as "no" is dangerous here -- a mistyped answer
+    to "Proceed?" would silently abandon a snipe the user meant to arm.
+    """
+    while True:
+        raw = ask(question + " (y/n)", default).strip().lower()
+        if raw in ("y", "yes"):
+            return True
+        if raw in ("n", "no"):
+            return False
+        print("  Please answer y or n.")
