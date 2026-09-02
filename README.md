@@ -245,6 +245,20 @@ Leave the window open. At 7:58:45 PM it wakes up, and at 8:00:00 it goes.
 | `snipe.bat check` | Verify login and card |
 | `snipe.bat card` | Add or replace the card |
 | `snipe.bat init` | Re-enter login *and* card from scratch |
+| `snipe.bat help` | Print a one-screen cheatsheet |
+
+Mistyping a command prints the cheatsheet and, where it can tell, suggests what
+you meant:
+
+```
+> snipe.bat lst
+
+  argument cmd: invalid choice: 'lst' (choose from 'help', 'init', ...)
+  Did you mean 'list'?
+
+teesniper -- snipe tee times at Los Verdes and Alondra Park
+  ...
+```
 
 ### Choosing a course
 

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import difflib
 import logging
+import re
 import sys
 
 from . import prompts
@@ -205,14 +207,98 @@ def cmd_when(args) -> int:
     return 0
 
 
+CHEATSHEET = """
+teesniper -- snipe tee times at Los Verdes and Alondra Park
+
+  Tee times unlock 8 days ahead at 8:00 PM Pacific. Start the bot any time
+  before then and leave it running; it wakes up and books at the drop.
+
+COMMANDS
+  {run}                       Snipe, asking for everything interactively
+  {run} snipe [flags]         Snipe with options preset
+  {run} list  [flags]         Show what is bookable right now
+  {run} when <date>           Show when a date unlocks
+  {run} check                 Verify login and card
+  {run} card                  Add or replace the saved card
+  {run} init                  Re-enter login and card from scratch
+  {run} help                  This cheatsheet
+
+FLAGS  (for snipe and list)
+  -d, --date DATE         2026-09-15 | 9/15 | Sep 15 | tomorrow | max
+  -p, --players N         1-4
+  -c, --course NAME       losverdes | alondra | alondra-par3 | both | all
+  -s, --start TIME        earliest acceptable, e.g. "7:00 am"
+  -e, --end   TIME        latest acceptable,   e.g. "10:00 am"
+      --holes 9|18        default: either
+      --walking           walking rates only
+      --riding            riding (cart) rates only
+  -v, --verbose           more logging
+
+FLAGS  (snipe only)
+      --dry-run           find and stage a slot, stop before paying
+      --yes               skip the confirmation prompt
+      --tries N           slots to attempt before giving up (default 4)
+      --deadline SECS     how long to keep hunting after the drop (default 180)
+
+EXAMPLES
+  {run} when 2026-09-15
+  {run} list -d tomorrow -p 2 -c both -s 6am -e 10am
+  {run} snipe -d 2026-09-15 -p 2 -c both -s 7am -e 10am --dry-run
+  {run} snipe -d 2026-09-15 -p 4 -c losverdes -s 7am -e 9am --holes 18 --riding
+
+  Full documentation is in README.md
+"""
+
+
+def _runner() -> str:
+    """How this tool is invoked on the current platform."""
+    return "snipe.bat" if sys.platform == "win32" else "./snipe"
+
+
+def print_cheatsheet() -> None:
+    print(CHEATSHEET.format(run=_runner()))
+
+
+class FriendlyParser(argparse.ArgumentParser):
+    """argparse, but a wrong command prints the cheatsheet instead of a stub."""
+
+    def error(self, message: str):
+        sys.stderr.write(f"\n  {message}\n")
+        near = _suggest(message)
+        if near:
+            sys.stderr.write(f"  Did you mean '{near}'?\n")
+        print_cheatsheet()
+        raise SystemExit(2)
+
+
+def _suggest(message: str) -> str | None:
+    """Suggest a correction, matched against the choices argparse itself listed.
+
+    Using the message's own "choose from" list keeps the suggestion relevant to
+    whichever argument was wrong -- a bad --course value should not be answered
+    with the name of a command.
+    """
+    bad = re.search(r"invalid choice: '([^']+)'", message)
+    if not bad:
+        return None
+    options = re.findall(r"'([^']+)'", message.split("choose from", 1)[-1])
+    if not options:
+        return None
+    matches = difflib.get_close_matches(bad.group(1), options, n=1, cutoff=0.5)
+    return matches[0] if matches else None
+
+
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
+    p = FriendlyParser(
         prog="teesniper",
         description="Snipe tee times at Los Verdes and Alondra Park.",
+        add_help=False,
     )
+    p.add_argument("-h", "--help", action="store_true", dest="show_help")
     p.add_argument("-v", "--verbose", action="store_true")
-    sub = p.add_subparsers(dest="cmd")
+    sub = p.add_subparsers(dest="cmd", parser_class=FriendlyParser)
 
+    sub.add_parser("help", help="show the cheatsheet")
     sub.add_parser("init", help="store login and card details locally")
     sub.add_parser("card", help="add or replace the saved card")
     sub.add_parser("check", help="verify logins and config")
@@ -251,6 +337,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if getattr(args, "show_help", False) or args.cmd == "help":
+        print_cheatsheet()
+        return 0
     _log_setup(getattr(args, "verbose", False))
     if args.cmd == "init":
         return cmd_init(args)
@@ -265,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "snipe":
         from .run_snipe import cmd_snipe
         return cmd_snipe(args)
-    build_parser().print_help()
+    print_cheatsheet()
     return 0
 
 
