@@ -133,7 +133,7 @@ Card number:
 Expiry month (MM): 09
 Expiry year (YYYY): 2030
 CVV:
-Name on card: Kevin Kwak
+Name on card: Alex Rivera
 Billing ZIP: 90045
 ```
 
@@ -149,7 +149,7 @@ You can also edit `config.json` by hand:
     "exp_month": "09",
     "exp_year": "2030",
     "cvv": "123",
-    "name": "Kevin Kwak",
+    "name": "Alex Rivera",
     "zip": "90045"
   }
 }
@@ -162,8 +162,8 @@ snipe.bat check
 ```
 ```
 Card:   ****1111  (ok)
-  Los Verdes Golf Course: logged in as Kevin Kwak
-  Alondra Park Golf Courses: logged in as Kevin Kwak
+  Los Verdes Golf Course: logged in as Alex Rivera
+  Alondra Park Golf Courses: logged in as Alex Rivera
 ```
 
 ---
