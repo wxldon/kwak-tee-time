@@ -166,6 +166,7 @@ def cmd_list(args) -> int:
         else prompts.ask_time_range()
     )
     holes = args.holes if args.holes else None
+    walking = args.walking
 
     for course in courses:
         print(f"\n=== {course.name} -- {date} ===")
@@ -179,9 +180,12 @@ def cmd_list(args) -> int:
         if msg:
             print(f"  {msg}")
         cands = extract_candidates(groups, course, players, holes)
+        if walking is not None:
+            cands = [c for c in cands if c.walking == walking]
         hits = filter_and_rank(cands, start, end)
         if not hits:
-            print(f"  Nothing between {start:%I:%M %p} and {end:%I:%M %p} for {players}.")
+            how = "" if walking is None else (" walking" if walking else " riding")
+            print(f"  Nothing{how} between {start:%I:%M %p} and {end:%I:%M %p} for {players}.")
             continue
         for h in hits:
             print(f"  {h.label()}")
@@ -228,6 +232,11 @@ def build_parser() -> argparse.ArgumentParser:
         s.add_argument("-s", "--start")
         s.add_argument("-e", "--end")
         s.add_argument("--holes", type=int, choices=(9, 18))
+        transport = s.add_mutually_exclusive_group()
+        transport.add_argument("--walking", dest="walking", action="store_true",
+                               default=None, help="only walking rates")
+        transport.add_argument("--riding", dest="walking", action="store_false",
+                               help="only riding (cart) rates")
         if name == "snipe":
             s.add_argument("--dry-run", action="store_true",
                            help="find and stage the slot but stop before paying")

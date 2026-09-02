@@ -151,6 +151,7 @@ def cmd_snipe(args) -> int:
     else:
         start, end = prompts.ask_time_range()
     holes = args.holes
+    walking = args.walking if args.walking is not None else prompts.ask_transport()
 
     if not args.dry_run and not cfg.card.filled:
         print("\n  No card saved. Booking will fail at payment.")
@@ -165,6 +166,7 @@ def cmd_snipe(args) -> int:
     print(f"    Time     {start:%I:%M %p} - {end:%I:%M %p}")
     print(f"    Players  {players}")
     print(f"    Holes    {holes or 'any'}")
+    print(f"    Transport {'either' if walking is None else ('walking' if walking else 'riding')}")
     print(f"    Courses  {', '.join(c.name for c in courses)}")
     print(f"    Card     {cfg.card.masked}")
     if wait > 0:
@@ -181,7 +183,7 @@ def cmd_snipe(args) -> int:
 
     target_for = lambda: Target(
         course=None, play_date=date, players=players,
-        start=start, end=end, holes=holes,
+        start=start, end=end, holes=holes, walking=walking,
     )
 
     stop = threading.Event()

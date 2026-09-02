@@ -152,5 +152,21 @@ def ask_holes() -> int | None:
     return None
 
 
+def ask_transport() -> bool | None:
+    """Walking, riding, or no preference. None means either."""
+    print("\n  1) Either  (takes whichever fits your time window first)")
+    print("  2) Riding   (with a cart)")
+    print("  3) Walking  (usually cheaper)")
+    while True:
+        choice = ask("Transport", "1").lower()
+        if choice in ("1", "either", "any"):
+            return None
+        if choice in ("2", "riding", "ride", "cart"):
+            return False
+        if choice in ("3", "walking", "walk"):
+            return True
+        print("  Pick 1, 2, or 3.")
+
+
 def ask_yes(question: str, default: str = "n") -> bool:
     return ask(question + " (y/n)", default).lower().startswith("y")

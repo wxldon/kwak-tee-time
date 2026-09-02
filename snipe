@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# teesniper launcher for macOS and Linux.
+# Windows users: use snipe.bat instead.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+PY=".venv/bin/python"
+
+if [ ! -x "$PY" ]; then
+  echo "First run: creating virtual environment..."
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -m venv .venv
+  else
+    echo "Python 3 not found. Install it from python.org (or 'brew install python')." >&2
+    exit 1
+  fi
+  "$PY" -m pip install --quiet --upgrade pip
+  "$PY" -m pip install --quiet -r requirements.txt
+fi
+
+if [ $# -eq 0 ]; then
+  exec "$PY" -m teesniper snipe
+else
+  exec "$PY" -m teesniper "$@"
+fi

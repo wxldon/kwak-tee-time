@@ -71,6 +71,10 @@ whichever course produces a match first — never two.
 
 You need **Python 3.11 or newer**.
 
+> **Windows** uses `snipe.bat`; **macOS/Linux** uses `./snipe`. Everything below
+> shows the Windows form — substitute `./snipe` on a Mac. `.bat` files do not
+> run on macOS, so `./snipe.bat` there just gives "permission denied".
+
 1. Install Python from [python.org](https://www.python.org/downloads/).
    **Tick "Add python.exe to PATH"** on the first screen of the installer —
    this is the single most common thing to get wrong.
@@ -183,6 +187,11 @@ Latest acceptable tee time [11:00 am]: 10:00 am
 Number of players [2]: 2
 Holes -- 9, 18, or 'any' [any]: 18
 
+  1) Either  (takes whichever fits your time window first)
+  2) Riding   (with a cart)
+  3) Walking  (usually cheaper)
+Transport [1]: 2
+
   1) Los Verdes
   2) Alondra Park
   3) Both of the above
@@ -260,6 +269,8 @@ whichever produces a match first, never two.
 | `-s`, `--start` | Earliest acceptable time | asked |
 | `-e`, `--end` | Latest acceptable time | asked |
 | `--holes` | `9` or `18` | either |
+| `--walking` | Walking rates only | either |
+| `--riding` | Riding (cart) rates only | either |
 | `--dry-run` | Find and stage a slot, stop before paying | off |
 | `--yes` | Skip the confirmation prompt | off |
 | `--tries` | Slots to attempt before giving up | 4 |
@@ -381,6 +392,9 @@ it sleeps until the drop.
   book an 18-hole par-3 round. `alondra` means the regulation course; pick
   `alondra-par3` (or `all`) if you actually want the short course. The driving
   range is never booked. Every result says which course it is on.
+- **Walking and riding are separate rates at the same tee time**, often $10–30
+  apart. Pick one with `--walking` / `--riding`, or leave it and the bot takes
+  whichever fits your window first.
 - **Los Verdes caps some rates at one booking per day per account.**
 - **Cart holds last 5 minutes.** The bot finishes well inside that, but if you
   get the 3-D Secure link, that's your window.
