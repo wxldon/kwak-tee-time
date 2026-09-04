@@ -172,7 +172,9 @@ def hunt(
     wait = seconds_until_release(target.play_date)
 
     if wait > 0:
-        status(f"Drop at {release:%a %b %d %I:%M:%S %p %Z} -- waiting {_fmt(wait)}")
+        # The remaining time is shown live by the countdown bar; this line is
+        # the one-time record of what we are waiting for.
+        status(f"Drop at {release:%a %b %d %I:%M:%S %p %Z}")
         # Warm the connection and capture a baseline ETag on the locked day.
         if wait > 90:
             if not sleep_until(release - dt.timedelta(seconds=75), should_stop=should_stop):
@@ -281,13 +283,3 @@ def hunt(
         time.sleep(max(0.0, interval - spent) + random.uniform(0, 0.05))
     return False
 
-
-def _fmt(seconds: float) -> str:
-    seconds = int(seconds)
-    h, rem = divmod(seconds, 3600)
-    m, s = divmod(rem, 60)
-    if h:
-        return f"{h}h {m}m {s}s"
-    if m:
-        return f"{m}m {s}s"
-    return f"{s}s"

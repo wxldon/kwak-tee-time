@@ -14,6 +14,7 @@ import requests
 from . import booking, checkout, prompts
 from .api import ApiError, TeeItUpClient
 from .config import Config
+from .console import Console, countdown
 from .courses import CART_HOLD_MINUTES, COURSES, DEFAULT_COURSE_KEYS
 from .search import Candidate
 from .sniper import Poller, Target, hunt
@@ -22,9 +23,15 @@ from .timing import release_time_for, seconds_until_release
 log = logging.getLogger(__name__)
 
 
-def _status(prefix: str):
+def _status(prefix: str, console: Console | None = None):
     def emit(msg: str) -> None:
-        print(f"  [{prefix}] {msg}", flush=True)
+        line = f"  [{prefix}] {msg}"
+        if console is None:
+            print(line, flush=True)
+        else:
+            # Goes through the console so it does not land on top of the
+            # countdown that the main thread is redrawing.
+            console.log(line)
     return emit
 
 
@@ -145,8 +152,9 @@ def book_candidate(
 
 
 def _run_one(course, target: Target, cfg: Config, args, stop: threading.Event,
-             results: dict, claim: threading.Lock, needs_attention: dict) -> None:
-    say = _status(course.key)
+             results: dict, claim: threading.Lock, needs_attention: dict,
+             console: Console | None = None) -> None:
+    say = _status(course.key, console)
     try:
         client = TeeItUpClient(course)
         client.login(cfg.username, cfg.password)
@@ -272,31 +280,46 @@ def cmd_snipe(args) -> int:
     claim = threading.Lock()
     results: dict = {}
     needs_attention: dict = {}
+    console = Console()
     threads = []
     for course in courses:
         t = target_for()
         t.course = course
         th = threading.Thread(
             target=_run_one,
-            args=(course, t, cfg, args, stop, results, claim, needs_attention), daemon=True
+            args=(course, t, cfg, args, stop, results, claim, needs_attention,
+                  console), daemon=True
         )
         threads.append(th)
         th.start()
     cancelled = False
     try:
         # join() in short slices, so Ctrl-C reaches us promptly instead of
-        # blocking in a single uninterruptible wait.
+        # blocking in a single uninterruptible wait -- and so the countdown
+        # keeps ticking while we wait.
         while any(t.is_alive() for t in threads):
             for t in threads:
                 t.join(timeout=0.2)
+            left = seconds_until_release(date)
+            if left > 0:
+                console.status(
+                    f"  {countdown(left)} until the drop"
+                    f" ({rel:%I:%M:%S %p})  --  Ctrl-C to cancel"
+                )
+            else:
+                console.status("  Hunting...  --  Ctrl-C to cancel")
+        console.clear()
     except KeyboardInterrupt:
         cancelled = True
         stop.set()
+        console.clear()
         print("\n  Cancelling -- waiting for both courses to stand down...")
         deadline = time.monotonic() + 10.0
         while any(t.is_alive() for t in threads) and time.monotonic() < deadline:
             for t in threads:
                 t.join(timeout=0.2)
+    finally:
+        console.clear()
 
     if results:
         for c in results.values():
