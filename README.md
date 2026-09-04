@@ -482,6 +482,18 @@ Or delete the `.venv` folder and run `./snipe check` again; the launcher now
 picks a newer Python when you have one, and installs a urllib3 that keeps quiet
 when you don't.
 
+**Something failed and it scrolled past**
+Every run writes a full transcript to `logs/` next to `config.json` — every
+request and response, with timings. Open the newest file:
+
+```
+ls -t logs | head -1
+```
+
+Card numbers, CVVs, passwords and session tokens are masked (a card shows as
+`<16 digits ending 1111>`), so the file is safe to read and to send to someone
+who can help. The last 20 runs are kept.
+
 **Nothing matched**
 Widen the time range, allow either hole count, or search `both` courses. Use
 `list` to see what actually exists that day.
