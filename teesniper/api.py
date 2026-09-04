@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import time
 from typing import Any
 
 import requests
 
+from . import debuglog
 from .courses import API_BASE, Course
 
 log = logging.getLogger(__name__)
@@ -112,11 +114,24 @@ class TeeItUpClient:
 
     def _request(self, method: str, path: str, **kw) -> Any:
         url = API_BASE + path
-        resp = self.http.request(method, url, timeout=self.timeout, **kw)
+        started = time.monotonic()
+        try:
+            resp = self.http.request(method, url, timeout=self.timeout, **kw)
+        except requests.RequestException as e:
+            debuglog.log_call(method, url, request=kw.get("json") or kw.get("params"),
+                              error=f"{type(e).__name__}: {e}",
+                              elapsed_ms=(time.monotonic() - started) * 1000)
+            raise
         try:
             body = resp.json()
         except ValueError:
             body = resp.text
+        debuglog.log_call(
+            method, url,
+            request=kw.get("json") if kw.get("json") is not None else kw.get("params"),
+            status=resp.status_code, response=body,
+            elapsed_ms=(time.monotonic() - started) * 1000,
+        )
         if not resp.ok:
             raise ApiError(resp.status_code, body, path, parse_retry_after(resp))
         return body

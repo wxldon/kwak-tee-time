@@ -8,8 +8,9 @@ import difflib
 import logging
 import re
 import sys
+from pathlib import Path
 
-from . import prompts
+from . import debuglog, prompts
 from .api import ApiError, TeeItUpClient
 from .config import Card, Config, config_path
 from .courses import COURSES, DEFAULT_COURSE_KEYS
@@ -18,12 +19,19 @@ from .sniper import Poller, Target, hunt
 from .timing import now_local, release_time_for, seconds_until_release
 
 
+def log_dir() -> Path:
+    return config_path().parent / "logs"
+
+
 def _log_setup(verbose: bool) -> None:
     logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.INFO,
+        level=logging.DEBUG,
         format="%(asctime)s  %(message)s",
         datefmt="%H:%M:%S",
     )
+    # The file transcript is always verbose; the terminal is not, unless asked.
+    for handler in logging.getLogger().handlers:
+        handler.setLevel(logging.DEBUG if verbose else logging.INFO)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
@@ -378,6 +386,13 @@ def main(argv: list[str] | None = None) -> int:
         print_cheatsheet()
         return 0
     _log_setup(getattr(args, "verbose", False))
+    try:
+        transcript = debuglog.start(log_dir(), args.cmd)
+        debuglog.prune(log_dir())
+    except OSError as e:
+        transcript = None
+        print(f"  (could not open a log file: {e})")
+    args.transcript = transcript
     if args.cmd == "init":
         return cmd_init(args)
     if args.cmd == "card":

@@ -249,6 +249,9 @@ def cmd_snipe(args) -> int:
     print(f"    Transport {'either' if walking is None else ('walking' if walking else 'riding')}")
     print(f"    Courses  {', '.join(c.name for c in courses)}")
     print(f"    Card     {cfg.card.masked}")
+    transcript = getattr(args, "transcript", None)
+    if transcript:
+        print(f"    Log      {transcript}")
     card_problems = cfg.card.problems
     if card_problems and not args.dry_run:
         # Better to refuse now than to win the slot and fail at the charge,
@@ -342,4 +345,6 @@ def cmd_snipe(args) -> int:
         print("  statement before running this again.")
         return 2
     print("\n  No booking made.")
+    if transcript:
+        print(f"  Every request and response is in:  {transcript}")
     return 1

@@ -19,6 +19,7 @@ from urllib.parse import urlencode
 
 import requests
 
+from . import debuglog
 from .api import ApiError, TeeItUpClient
 from .config import Config
 from .courses import TR_BASE
@@ -152,6 +153,10 @@ def add_reservation(client: TeeItUpClient, payload: dict[str, Any], token: str) 
     """
     body = dict(payload)
     body["Token"] = token
+    url = TR_BASE + "/AddReservation"
+    # Record the attempt BEFORE it goes out: if we never see a reply, the log
+    # is the only evidence that the charge was submitted at all.
+    debuglog.log_call("POST", url, request=body)
     try:
         resp = client.http.post(
             TR_BASE + "/AddReservation",
@@ -165,13 +170,16 @@ def add_reservation(client: TeeItUpClient, payload: dict[str, Any], token: str) 
         )
     except requests.RequestException as e:
         # The request went out; we never saw the reply. Assume money moved.
+        debuglog.log_call("POST", url, error=f"NO REPLY {type(e).__name__}: {e}")
         raise ChargeUncertain(
             f"no reply from the payment service ({type(e).__name__}: {e})"
         ) from e
 
     try:
         data = resp.json()
+        debuglog.log_call("POST", url, status=resp.status_code, response=data)
     except ValueError:
+        debuglog.log_call("POST", url, status=resp.status_code, response=resp.text[:1000])
         if resp.status_code >= 500 or not resp.ok:
             # A 5xx or an HTML error page after the charge was submitted: we
             # cannot tell whether it was taken.
