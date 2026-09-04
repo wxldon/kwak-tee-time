@@ -1,3 +1,9 @@
 requests>=2.32.0
 python-dateutil>=2.9.0
 tzdata>=2024.1
+
+# macOS still ships Python 3.9 built against LibreSSL 2.8.3, and urllib3 v2
+# refuses to support anything below OpenSSL 1.1.1 -- it imports with a
+# NotOpenSSLWarning on every run. urllib3 1.26 supports it quietly and requests
+# is happy with either. Newer Pythons get urllib3 v2 as normal.
+urllib3<2 ; python_version < "3.10"

@@ -468,6 +468,20 @@ Your bank wants an extra confirmation the bot can't answer. It prints a link;
 open it in a browser within 5 minutes to finish. If this keeps happening, try a
 different card.
 
+**`NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+ ... LibreSSL 2.8.3`**
+Harmless, and already fixed for new installs. macOS ships Python 3.9 built
+against a 2018 version of LibreSSL that urllib3 v2 declines to support, so it
+complains once on every run. The tool works — the warning is noise, not a
+failure. If you set up before this fix, clear it with:
+
+```
+.venv/bin/python -m pip install "urllib3<2"
+```
+
+Or delete the `.venv` folder and run `./snipe check` again; the launcher now
+picks a newer Python when you have one, and installs a urllib3 that keeps quiet
+when you don't.
+
 **Nothing matched**
 Widen the time range, allow either hole count, or search `both` courses. Use
 `list` to see what actually exists that day.

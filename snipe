@@ -8,12 +8,21 @@ PY=".venv/bin/python"
 
 if [ ! -x "$PY" ]; then
   echo "First run: creating virtual environment..."
-  if command -v python3 >/dev/null 2>&1; then
-    python3 -m venv .venv
-  else
+  # Prefer a modern interpreter. macOS's built-in python3 is 3.9 linked against
+  # a 2018 LibreSSL; it works, but a newer one is a better bet for TLS.
+  BOOTSTRAP=""
+  for candidate in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      BOOTSTRAP="$candidate"
+      break
+    fi
+  done
+  if [ -z "$BOOTSTRAP" ]; then
     echo "Python 3 not found. Install it from python.org (or 'brew install python')." >&2
     exit 1
   fi
+  echo "Using $("$BOOTSTRAP" -V 2>&1)"
+  "$BOOTSTRAP" -m venv .venv
   "$PY" -m pip install --quiet --upgrade pip
   "$PY" -m pip install --quiet -r requirements.txt
 fi
